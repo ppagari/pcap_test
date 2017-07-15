@@ -1,0 +1,149 @@
+#include <pcap.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <./net/ethernet.h>
+#include <./arpa/inet.h>
+
+#define	ETH_ALEN 6
+
+typedef	u_int32_t tcp_seq;
+
+struct _ether_header{
+  	unsigned char ether_dhost[ETH_ALEN];	/* destination eth addr	*/
+  	unsigned char ether_shost[ETH_ALEN];	/* source ether addr	*/
+ 	short ether_type;		        /* packet type ID field	*/
+};
+
+struct _ip_header{
+    unsigned short int ihl:4;
+    unsigned short int ver:4;
+    unsigned char tos;
+    unsigned short int length;
+    unsigned short int identification;
+    unsigned short int flag_offset;
+    unsigned char ttl;
+    unsigned char protocol;
+    unsigned short int checksum;
+    struct in_addr ucSource;
+    struct in_addr ucDestination;
+};
+
+struct _tcp_header{
+	unsigned short th_sport;	/* source port */
+	unsigned short th_dport;	/* destination port */
+	unsigned int th_seq;		/* sequence number */
+	unsigned int th_ack;		/* acknowledgement  */
+	unsigned char th_offset;	/* data offset */
+	unsigned char th_flags;
+	unsigned short int th_win;		/* window */
+	unsigned short int th_sum;		/* checksum */
+	unsigned short int th_urp;		/* urgent pointer */
+};
+
+void print_mac(char *mac){
+	int i;
+	for(i=0;i<6;i++){
+		printf("%02x",(int)(*(unsigned char*)(&mac[i])));
+		if(i == 5)
+			continue;
+		printf(":");
+	}
+	printf("\n");
+}
+
+
+int main(int argc, char *argv[]){
+	pcap_t *handle;			/* Session handle */
+	char *dev;			/* The device to sniff on */
+	char errbuf[PCAP_ERRBUF_SIZE];	/* Error string */
+	struct bpf_program fp;		/* The compiled filter */
+	char filter_exp[] = "port 80";	/* The filter expression */
+	bpf_u_int32 mask;		/* Our netmask */
+	bpf_u_int32 net;		/* Our IP */
+	struct pcap_pkthdr *header;	/* The header that pcap gives us */
+	const u_char *packet;		/* The actual packet */
+
+	int i,size_ip;
+ 	unsigned char size_th;
+	struct _ether_header *eh;
+
+	struct _ip_header *ih;
+	struct _tcp_header *th;
+	const u_char *packet_data;
+	const char *data;
+
+	/* Define the device */
+	dev = pcap_lookupdev(errbuf);
+	if (dev == NULL) {
+		fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
+		return(2);
+	}
+	/* Find the properties for the device */
+	if (pcap_lookupnet(dev, &net, &mask, errbuf) == -1) {
+		fprintf(stderr, "Couldn't get netmask for device %s: %s\n", dev, errbuf);
+		net = 0;
+		mask = 0;
+	}
+	/* Open the session in promiscuous mode */
+	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+
+	if (handle == NULL) {
+		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		return(2);
+	}
+	/* Compile and apply the filter */
+	if (pcap_compile(handle, &fp, filter_exp, 0, net) == -1) {
+		fprintf(stderr, "Couldn't parse filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		return(2);
+	}
+	if (pcap_setfilter(handle, &fp) == -1) {
+		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
+		return(2);
+	}
+	/* Grab a packet */
+	while(1){
+		packet = pcap_next_ex(handle, &header, &packet_data);
+		if(packet == 0)
+			continue;
+		else if(packet == 1){	// success
+			eh = (struct _ether_header*)(packet_data);
+			ih = (struct _ip_header*)(packet_data+14);
+
+			size_ip = (ih->ihl)*4;
+			th = (struct _tcp_header*)(packet_data + 14 + size_ip);
+			size_th = (th->th_offset >> 2);
+			data = (char *)(packet_data + 14 + size_ip + size_th);
+			if(ntohs(eh->ether_type) == ETHERTYPE_IP & ih->protocol == 0x06){
+				printf("================================\n");
+				printf("MAC address[shost] : ");
+				print_mac(eh->ether_shost);
+				printf("MAC address[dhost] : ");
+				print_mac(eh->ether_dhost);
+				printf("source ip : %s \n", inet_ntoa(ih->ucSource));
+				printf("dest ip : %s \n", inet_ntoa(ih->ucDestination));
+				printf("sour port : %d \n", ntohs(th->th_sport));
+				printf("dest port : %d \n", ntohs(th->th_dport));
+				/*for(i=0;i<(header->len);i++){
+					if(i%16 == 0 )
+						printf("\n");
+					printf("%02x ",packet_data[i]);
+				}*/
+				for(i=0;i<16;i++){
+					if(i%16 == 0 )
+						printf("\n");
+					printf("%c",data[i]);
+				}
+				printf("\n================================\n");
+				eh->ether_type = 0;
+				ih->protocol = 0;
+			}
+		}
+		else if(packet < 0){
+			perror(packet);
+			exit(1);
+		}
+	}
+	/* And close the session */
+	pcap_close(handle);
+	return(0);
+}
