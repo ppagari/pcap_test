@@ -40,7 +40,7 @@ struct _tcp_header{
 	unsigned short int th_urp;		/* urgent pointer */
 };
 
-void print_mac(char *mac){
+void print_mac(u_char *mac){
 	int i;
 	for(i=0;i<6;i++){
 		printf("%02x",(int)(*(unsigned char*)(&mac[i])));
@@ -64,6 +64,7 @@ int main(int argc, char *argv[]){
 	const u_char *packet;		/* The actual packet */
 
 	int i,size_ip;
+	int data_size;	
  	unsigned char size_th;
 	struct _ether_header *eh;
 
@@ -71,7 +72,6 @@ int main(int argc, char *argv[]){
 	struct _tcp_header *th;
 	const u_char *packet_data;
 	const char *data;
-
 	/* Define the device */
 	dev = pcap_lookupdev(errbuf);
 	if (dev == NULL) {
@@ -100,10 +100,9 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "Couldn't install filter %s: %s\n", filter_exp, pcap_geterr(handle));
 		return(2);
 	}
-	/* Grab a packet */
 	while(1){
 		packet = pcap_next_ex(handle, &header, &packet_data);
-		if(packet == 0)
+		if(packet_data == 0)
 			continue;
 		else if(packet == 1){	// success
 			eh = (struct _ether_header*)(packet_data);
@@ -113,8 +112,9 @@ int main(int argc, char *argv[]){
 			th = (struct _tcp_header*)(packet_data + 14 + size_ip);
 			size_th = (th->th_offset >> 2);
 			data = (char *)(packet_data + 14 + size_ip + size_th);
-			if(ntohs(eh->ether_type) == ETHERTYPE_IP & ih->protocol == 0x06){
-				printf("================================\n");
+			data_size = ntohs(ih->length)*4-size_ip - size_th;
+			if(ntohs(eh->ether_type) == ETHERTYPE_IP && (ih->protocol) == IPPROTO_TCP){
+				printf("=====================================\n");
 				printf("MAC address[shost] : ");
 				print_mac(eh->ether_shost);
 				printf("MAC address[dhost] : ");
@@ -123,23 +123,15 @@ int main(int argc, char *argv[]){
 				printf("dest ip : %s \n", inet_ntoa(ih->ucDestination));
 				printf("sour port : %d \n", ntohs(th->th_sport));
 				printf("dest port : %d \n", ntohs(th->th_dport));
-				/*for(i=0;i<(header->len);i++){
-					if(i%16 == 0 )
-						printf("\n");
-					printf("%02x ",packet_data[i]);
-				}*/
-				for(i=0;i<16;i++){
-					if(i%16 == 0 )
-						printf("\n");
+				printf("data size : %d \n", data_size);
+				printf("\n===============data==================\n");
+				for(i=0;i<data_size;i++){
 					printf("%c",data[i]);
 				}
-				printf("\n================================\n");
-				eh->ether_type = 0;
-				ih->protocol = 0;
+				printf("\n=====================================\n");
 			}
 		}
 		else if(packet < 0){
-			perror(packet);
 			exit(1);
 		}
 	}
