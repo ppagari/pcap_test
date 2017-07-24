@@ -67,7 +67,6 @@ int main(int argc, char *argv[]){
 	int data_size;	
  	unsigned char size_th;
 	struct _ether_header *eh;
-	struct in_addr addr;
 	char buf[20];
 	struct _ip_header *ih;
 	struct _tcp_header *th;
