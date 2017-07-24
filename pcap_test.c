@@ -67,7 +67,8 @@ int main(int argc, char *argv[]){
 	int data_size;	
  	unsigned char size_th;
 	struct _ether_header *eh;
-
+	struct in_addr addr;
+	char buf[20];
 	struct _ip_header *ih;
 	struct _tcp_header *th;
 	const u_char *packet_data;
@@ -119,8 +120,10 @@ int main(int argc, char *argv[]){
 				print_mac(eh->ether_shost);
 				printf("MAC address[dhost] : ");
 				print_mac(eh->ether_dhost);
-				printf("source ip : %s \n", inet_ntoa(ih->ucSource));
-				printf("dest ip : %s \n", inet_ntoa(ih->ucDestination));
+				inet_ntop(AF_INET,&(ih->ucSource).s_addr, buf, sizeof(buf));
+				printf("source ip : %s \n", buf);
+				inet_ntop(AF_INET,&(ih->ucDestination).s_addr, buf, sizeof(buf));
+				printf("dest ip : %s \n", buf);
 				printf("sour port : %d \n", ntohs(th->th_sport));
 				printf("dest port : %d \n", ntohs(th->th_dport));
 				printf("data size : %d \n", data_size);
