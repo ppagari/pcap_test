@@ -67,7 +67,7 @@ int main(int argc, char *argv[]){
 	int data_size;	
  	unsigned char size_th;
 	struct _ether_header *eh;
-	char buf[20];
+	char buf[INET_ADDRSTRLEN];
 	struct _ip_header *ih;
 	struct _tcp_header *th;
 	const u_char *packet_data;
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]){
 		return(2);
 	}
 	while(1){
-		packet = pcap_next_ex(handle, &header, &packet_data);
+		packet = pcap_next_ex(handle, 3, &packet_data);
 		if(packet_data == 0)
 			continue;
 		else if(packet == 1){	// success
